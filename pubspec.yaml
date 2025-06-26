@@ -1,0 +1,44 @@
+name: bubble_math2
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  audioplayers: ^6.0.0
+  confetti: ^0.7.0
+  google_fonts: ^6.2.1
+  http: ^1.2.1
+  shared_preferences: ^2.2.3
+  youtube_player_flutter: ^8.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+  
+  # Paket untuk membuat ikon aplikasi diletakkan di sini
+  flutter_launcher_icons: ^0.13.1
+
+# Bagian ini HARUS sejajar dengan 'flutter:', 'dependencies:', dll.
+# Ini adalah konfigurasi untuk package flutter_launcher_icons
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo.png" # Pastikan file ini ada
+  min_sdk_android: 21
+
+flutter:
+  uses-material-design: true
+
+  # Daftarkan semua folder aset Anda di sini
+  assets:
+    - assets/audio/
+    - assets/images/ # <-- PENTING: Folder gambar/logo ditambahkan di sini
