@@ -8,10 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
-import 'package:audioplayers/audioplayers.dart';
-// === PERUBAHAN: 1. Impor package YouTube Player ===
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
-
 
 // Palet warna (tidak berubah)
 const Color kBgColor = Color(0xFFE3F2FD);
@@ -25,7 +22,7 @@ final List<Color> kCardColors = [
   Colors.purple.shade200,
 ];
 
-// Kelas MateriScreen tidak berubah secara signifikan
+// Kelas MateriScreen (tidak ada perubahan di sini)
 class MateriScreen extends StatefulWidget {
   const MateriScreen({super.key});
 
@@ -37,9 +34,6 @@ class _MateriScreenState extends State<MateriScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   late Future<List<dynamic>> _materiFuture;
   late AnimationController _animationController;
-  final AudioPlayer _musicPlayer = AudioPlayer();
-  final AudioPlayer _sfxPlayer = AudioPlayer();
-  double _volume = 0.5;
 
   Set<String> _completedMateriIds = {};
 
@@ -47,14 +41,11 @@ class _MateriScreenState extends State<MateriScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
-    _musicPlayer.setReleaseMode(ReleaseMode.loop);
     _materiFuture = _fetchMateri();
     _animationController = AnimationController(
       duration: const Duration(seconds: 40),
       vsync: this,
     )..repeat();
-    _initializeAudio();
     _loadCompletedStatus();
   }
 
@@ -65,62 +56,26 @@ class _MateriScreenState extends State<MateriScreen>
       _completedMateriIds = completedIds.toSet();
     });
   }
-  
-  // Fungsi-fungsi lain tidak berubah...
-    @override
+
+  @override
   void dispose() {
     _animationController.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    _musicPlayer.stop();
-    _musicPlayer.dispose();
-    _sfxPlayer.dispose();
     super.dispose();
-  }
-
-  Future<void> _initializeAudio() async {
-    await _loadVolume();
-    _playBackgroundMusic();
-  }
-
-  Future<void> _loadVolume() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _volume = prefs.getDouble('gameVolume') ?? 0.5;
-    });
-  }
-
-  Future<void> _playBackgroundMusic() async {
-    if (_volume > 0) {
-      await _musicPlayer.setVolume(_volume);
-      await _musicPlayer.play(AssetSource('audio/music_3.mp3'));
-    }
-  }
-
-  void _playSoundEffect(String soundAsset) {
-    if (_volume > 0) {
-      _sfxPlayer.play(AssetSource(soundAsset), volume: _volume);
-    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      _musicPlayer.pause();
-    } else if (state == AppLifecycleState.resumed) {
-      if (_volume > 0) {
-        _musicPlayer.resume();
-      }
-    }
   }
 
   Future<List<dynamic>> _fetchMateri() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? token = prefs.getString('access_token');
-      if (token == null)
+      if (token == null) {
         throw Exception('Token tidak ditemukan, silakan login ulang');
+      }
 
       final response = await http.get(
         Uri.parse('http://127.0.0.1:8000/api/materi'),
@@ -129,14 +84,16 @@ class _MateriScreenState extends State<MateriScreen>
           'Authorization': 'Bearer $token'
         },
       );
-      if (response.statusCode == 200)
+      if (response.statusCode == 200) {
         return jsonDecode(response.body);
-      else
+      } else {
         throw Exception('Gagal memuat materi. Status: ${response.statusCode}');
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Terjadi kesalahan: ${e.toString()}')));
+      }
       rethrow;
     }
   }
@@ -171,13 +128,16 @@ class _MateriScreenState extends State<MateriScreen>
                   child: FutureBuilder<List<dynamic>>(
                     future: _materiFuture,
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting)
+                      if (snapshot.connectionState == ConnectionState.waiting) {
                         return _buildLoadingState();
-                      if (snapshot.hasError)
+                      }
+                      if (snapshot.hasError) {
                         return _buildErrorState(
                             context, snapshot.error.toString());
-                      if (!snapshot.hasData || snapshot.data!.isEmpty)
+                      }
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
                         return _buildEmptyState(context);
+                      }
 
                       var materiList = snapshot.data!;
                       return ListView.builder(
@@ -188,8 +148,8 @@ class _MateriScreenState extends State<MateriScreen>
                           final bool isCompleted = _completedMateriIds
                               .contains(materiList[index]['id'].toString());
 
-                          return _buildBubbleMateriItem(context,
-                              materiList[index], index, isCompleted);
+                          return _buildBubbleMateriItem(
+                              context, materiList[index], index, isCompleted);
                         },
                       );
                     },
@@ -203,8 +163,8 @@ class _MateriScreenState extends State<MateriScreen>
     );
   }
 
-  Widget _buildBubbleMateriItem(BuildContext context, dynamic materi,
-      int index, bool isCompleted) {
+  Widget _buildBubbleMateriItem(
+      BuildContext context, dynamic materi, int index, bool isCompleted) {
     final cardColor = kCardColors[index % kCardColors.length];
     bool hasVideo = materi['link_yt'] != null && materi['link_yt'].isNotEmpty;
 
@@ -216,17 +176,13 @@ class _MateriScreenState extends State<MateriScreen>
           Transform.scale(scale: scale, child: child),
       child: GestureDetector(
         onTap: () async {
-          _playSoundEffect('audio/bubble_pop.mp3');
-          _musicPlayer.pause();
           await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  DetailMateriScreen(materi: materi, volume: _volume),
+              builder: (context) => DetailMateriScreen(materi: materi),
             ),
           );
           _loadCompletedStatus();
-          _musicPlayer.resume();
         },
         child: Container(
           margin: const EdgeInsets.only(bottom: 20),
@@ -234,8 +190,7 @@ class _MateriScreenState extends State<MateriScreen>
           decoration: BoxDecoration(
               color: cardColor.withOpacity(0.7),
               borderRadius: BorderRadius.circular(30),
-              border:
-                  Border.all(color: Colors.white.withOpacity(0.8), width: 2),
+              border: Border.all(color: Colors.white.withOpacity(0.8), width: 2),
               boxShadow: [
                 BoxShadow(
                     color: cardColor.withOpacity(0.3),
@@ -296,7 +251,7 @@ class _MateriScreenState extends State<MateriScreen>
       ),
     );
   }
-  
+
   Widget _buildCustomHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20),
@@ -304,7 +259,6 @@ class _MateriScreenState extends State<MateriScreen>
         children: [
           GestureDetector(
             onTap: () {
-              _playSoundEffect('audio/bubble_pop.mp3');
               Navigator.of(context).pop();
             },
             child: Container(
@@ -393,7 +347,6 @@ class _MateriScreenState extends State<MateriScreen>
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20))),
             onPressed: () {
-              _playSoundEffect('audio/bubble_pop.mp3');
               setState(() {
                 _materiFuture = _fetchMateri();
               });
@@ -404,48 +357,68 @@ class _MateriScreenState extends State<MateriScreen>
       ])));
 }
 
+// =========================================================================
+// DetailMateriScreen dengan perbaikan pemutar video Youtube
+// =========================================================================
 
 class DetailMateriScreen extends StatefulWidget {
   final dynamic materi;
-  final double volume;
-  const DetailMateriScreen(
-      {super.key, required this.materi, required this.volume});
+  const DetailMateriScreen({super.key, required this.materi});
   @override
   State<DetailMateriScreen> createState() => _DetailMateriScreenState();
 }
 
 class _DetailMateriScreenState extends State<DetailMateriScreen> {
-  final AudioPlayer _sfxPlayer = AudioPlayer();
-
-  // === PERUBAHAN: 2. Tambahkan controller YouTube ===
   YoutubePlayerController? _youtubeController;
-
   Timer? _readTimer;
   Timer? _countdownTimer;
   static const int _totalReadTime = 300;
   int _countdown = _totalReadTime;
   bool _isCompleted = false;
 
+  bool _isPlayerReady = false;
+  bool _showControls = true;
+  Timer? _controlsTimer;
+
   @override
   void initState() {
     super.initState();
-    _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
-    
-    // === PERUBAHAN: 3. Inisialisasi controller jika ada link YouTube ===
     final String? youtubeUrl = widget.materi['link_yt'];
     if (youtubeUrl != null && youtubeUrl.isNotEmpty) {
       final videoId = YoutubePlayer.convertUrlToId(youtubeUrl);
+      print('Debug youtubeUrl=$youtubeUrl videoId=$videoId');
       if (videoId != null) {
         _youtubeController = YoutubePlayerController(
           initialVideoId: videoId,
           flags: const YoutubePlayerFlags(
-            autoPlay: true,
+            autoPlay: false,
             mute: false,
+            showLiveFullscreenButton: false,
           ),
-        );
+        )..addListener(_playerListener);
       }
     }
     _startReadingTimer();
+  }
+
+  void _playerListener() {
+    if (_isPlayerReady && mounted) {
+      setState(() {});
+      if (_youtubeController!.value.isPlaying) {
+        _hideControlsAfterDelay();
+      }
+    }
+  }
+
+  void _hideControlsAfterDelay() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _youtubeController!.value.isPlaying) {
+        setState(() {
+          _showControls = false;
+        });
+      }
+    });
   }
 
   Future<void> _startReadingTimer() async {
@@ -455,12 +428,12 @@ class _DetailMateriScreenState extends State<DetailMateriScreen> {
       setState(() {
         _isCompleted = true;
       });
-      return; 
+      return;
     }
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_countdown > 0) {
-        if(mounted) setState(() => _countdown--);
+        if (mounted) setState(() => _countdown--);
       } else {
         timer.cancel();
       }
@@ -473,10 +446,8 @@ class _DetailMateriScreenState extends State<DetailMateriScreen> {
 
   Future<void> _markAsCompleted() async {
     if (mounted && !_isCompleted) {
-      _playSfx('audio/bubble-pop-6.mp3');
       final prefs = await SharedPreferences.getInstance();
       final completedIds = prefs.getStringList('completed_materi_ids') ?? [];
-
       String currentMateriId = widget.materi['id'].toString();
       if (!completedIds.contains(currentMateriId)) {
         completedIds.add(currentMateriId);
@@ -496,52 +467,20 @@ class _DetailMateriScreenState extends State<DetailMateriScreen> {
   void dispose() {
     _readTimer?.cancel();
     _countdownTimer?.cancel();
-    _sfxPlayer.dispose();
-    // === PERUBAHAN: 4. Dispose controller YouTube ===
+    _controlsTimer?.cancel();
+    _youtubeController?.removeListener(_playerListener);
     _youtubeController?.dispose();
     super.dispose();
   }
 
-  void _playSfx(String soundAsset) {
-    if (widget.volume > 0) {
-      _sfxPlayer.play(AssetSource(soundAsset), volume: widget.volume);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    String? imageUrl = widget.materi['gambar_url']; // Menggunakan gambar_url dari API
-    bool isImageValid =
-        imageUrl != null && Uri.tryParse(imageUrl)?.isAbsolute == true;
-
-    // === PERUBAHAN: 5. Widget media dinamis (Video atau Gambar) ===
-    Widget mediaWidget;
-    if (_youtubeController != null) {
-      mediaWidget = YoutubePlayer(
-        controller: _youtubeController!,
-        showVideoProgressIndicator: true,
-        progressIndicatorColor: kAccentColor,
-        progressColors: const ProgressBarColors(
-          playedColor: kAccentColor,
-          handleColor: kAccentColor,
-        ),
-      );
-    } else if (isImageValid) {
-      mediaWidget = Image.network(imageUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) =>
-              _buildPlaceholderGradient());
-    } else {
-      mediaWidget = _buildPlaceholderGradient();
-    }
-
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 250.0, // Ukuran appbar bisa disesuaikan
+            expandedHeight: 250.0,
             backgroundColor: kBgColor,
             elevation: 2,
             pinned: true,
@@ -554,41 +493,18 @@ class _DetailMateriScreenState extends State<DetailMateriScreen> {
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                       fontSize: 16,
-                      shadows: [const Shadow(blurRadius: 2, color: Colors.black54)]
-                  ),
+                      shadows: const [
+                        Shadow(blurRadius: 2, color: Colors.black54)
+                      ]),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis),
-              background: ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(40)),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // === PERUBAHAN: 6. Tampilkan widget media di sini ===
-                    mediaWidget,
-                    // Gradient overlay agar judul selalu terbaca
-                    Container(
-                        decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                                colors: [
-                                  Colors.black.withOpacity(0.5),
-                                  Colors.transparent,
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.center,
-                            )
-                        )
-                    )
-                  ],
-                ),
-              ),
+              background: _buildMediaWidget(),
             ),
-             leading: Padding(
+            leading: Padding(
               padding: const EdgeInsets.all(8.0),
               child: GestureDetector(
                 onTap: () {
-                  _playSfx('audio/bubble_pop.mp3');
                   Navigator.of(context).pop();
                 },
                 child: Container(
@@ -649,6 +565,109 @@ class _DetailMateriScreenState extends State<DetailMateriScreen> {
     );
   }
 
+  Widget _buildMediaWidget() {
+    String? imageUrl = widget.materi['gambar_url'];
+    bool isImageValid =
+        imageUrl != null && Uri.tryParse(imageUrl)?.isAbsolute == true;
+
+    if (_youtubeController != null) {
+      return _buildVideoPlayer();
+    } else if (isImageValid) {
+      return ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _buildPlaceholderGradient(),
+        ),
+      );
+    } else {
+      return _buildPlaceholderGradient();
+    }
+  }
+
+  Widget _buildVideoPlayer() {
+    return YoutubePlayerBuilder(
+      player: YoutubePlayer(
+        controller: _youtubeController!,
+        showVideoProgressIndicator: true,
+        progressIndicatorColor: kAccentColor,
+        onReady: () {
+          setState(() {
+            _isPlayerReady = true;
+          });
+        },
+      ),
+      builder: (context, player) {
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _showControls = !_showControls;
+              if (_showControls) _hideControlsAfterDelay();
+            });
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
+                child: player,
+              ),
+              AnimatedOpacity(
+                opacity: _showControls ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: _buildVideoControls(),
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildVideoControls() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.replay_10_rounded, color: Colors.white, size: 30),
+            onPressed: _isPlayerReady ? () {
+              final newPosition = _youtubeController!.value.position - const Duration(seconds: 10);
+              _youtubeController!.seekTo(newPosition);
+            } : null,
+          ),
+          IconButton(
+            icon: Icon(
+              _youtubeController!.value.isPlaying
+                  ? Icons.pause_circle_filled_rounded
+                  : Icons.play_circle_filled_rounded,
+              color: Colors.white,
+              size: 50,
+            ),
+            onPressed: _isPlayerReady ? () {
+              _youtubeController!.value.isPlaying
+                  ? _youtubeController!.pause()
+                  : _youtubeController!.play();
+              _hideControlsAfterDelay();
+            } : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.forward_10_rounded, color: Colors.white, size: 30),
+            onPressed: _isPlayerReady ? () {
+              final newPosition = _youtubeController!.value.position + const Duration(seconds: 10);
+              _youtubeController!.seekTo(newPosition);
+            } : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPlaceholderGradient() => Container(
       decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -657,7 +676,7 @@ class _DetailMateriScreenState extends State<DetailMateriScreen> {
               end: Alignment.bottomRight)));
 }
 
-// Widget-widget lainnya tetap sama
+// Widget-widget lainnya (InfoBubble, TombolSelesai, dll.) tidak berubah
 class InfoBubble extends StatelessWidget {
   final String text;
   final IconData icon;
@@ -692,10 +711,13 @@ class TombolSelesai extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color buttonColor = isCompleted ? Colors.green.shade400 : Colors.grey.shade400;
-    final IconData iconData = isCompleted ? Icons.check_circle_outline_rounded : Icons.hourglass_empty_rounded;
-    final String countdownText = isCompleted 
-        ? "Kembali" 
+    final Color buttonColor =
+        isCompleted ? Colors.green.shade400 : Colors.grey.shade400;
+    final IconData iconData = isCompleted
+        ? Icons.check_circle_outline_rounded
+        : Icons.hourglass_empty_rounded;
+    final String countdownText = isCompleted
+        ? "Kembali"
         : "Selesaikan Baca (${(countdown ~/ 60).toString().padLeft(2, '0')}:${(countdown % 60).toString().padLeft(2, '0')})";
 
     return SizedBox(
@@ -703,14 +725,14 @@ class TombolSelesai extends StatelessWidget {
         child: ElevatedButton.icon(
             onPressed: isCompleted ? onPressed : null,
             style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: buttonColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25)),
-                elevation: 5,
-                shadowColor: buttonColor.withOpacity(0.4),
-                disabledBackgroundColor: Colors.grey.shade300,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: buttonColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(25)),
+              elevation: 5,
+              shadowColor: buttonColor.withOpacity(0.4),
+              disabledBackgroundColor: Colors.grey.shade300,
             ),
             icon: Icon(iconData, size: 28),
             label: Text(countdownText,
@@ -748,8 +770,7 @@ class StyledContentText extends StatelessWidget {
 class AnimatedFadeSlide extends StatefulWidget {
   final Duration delay;
   final Widget child;
-  const AnimatedFadeSlide(
-      {super.key, required this.delay, required this.child});
+  const AnimatedFadeSlide({super.key, required this.delay, required this.child});
   @override
   State<AnimatedFadeSlide> createState() => _AnimatedFadeSlideState();
 }
@@ -764,9 +785,9 @@ class _AnimatedFadeSlideState extends State<AnimatedFadeSlide>
     super.initState();
     _controller = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));
-    _slideAnimation = Tween<Offset>(
-            begin: const Offset(0, 0.2), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
+            CurvedAnimation(parent: _controller, curve: Curves.easeOut));
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0)
         .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
     Future.delayed(widget.delay, () {

@@ -35,25 +35,44 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin, 
   bool _isGameUnlocked = false;
   bool _isLoadingStatus = true; // Untuk menampilkan loading saat cek status
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _bgController = AnimationController(duration: const Duration(seconds: 25), vsync: this)..repeat();
-    _menuController = AnimationController(duration: const Duration(seconds: 4), vsync: this)..repeat(reverse: true);
-    _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
-    _musicPlayer.setReleaseMode(ReleaseMode.loop);
-    _initializeAudio();
+ @override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+  _bgController = AnimationController(duration: const Duration(seconds: 25), vsync: this)..repeat();
+  _menuController = AnimationController(duration: const Duration(seconds: 4), vsync: this)..repeat(reverse: true);
+  _sfxPlayer.setPlayerMode(PlayerMode.lowLatency);
+  _musicPlayer.setReleaseMode(ReleaseMode.loop);
+  _loadVolume().then((_) => _playBackgroundMusic());
+  _checkGameUnlockStatus();
+}
 
-    // === PERUBAHAN: Cek status kunci game saat layar dibuka ===
-    _checkGameUnlockStatus();
+@override
+void dispose() {
+  _bgController.dispose();
+  _menuController.dispose();
+  _musicPlayer.stop();
+  _musicPlayer.dispose();
+  _sfxPlayer.dispose();
+  WidgetsBinding.instance.removeObserver(this);
+  super.dispose();
+}
+
+// Saat pindah ke screen lain, stop musik
+Future<void> _stopMusic() async {
+  await _musicPlayer.stop();
+}
+
+// Saat kembali dari screen lain, play musik lagi
+Future<void> _resumeMusic() async {
+  if (_volume > 0) {
+    await _musicPlayer.play(AssetSource('audio/music_4.mp3'));
+    await _musicPlayer.setVolume(_volume);
   }
+}
 
-  Future<void> _initializeAudio() async {
-    await _loadVolume();
-    _playBackgroundMusic();
-  }
 
+ 
   // === PERUBAHAN: Fungsi baru untuk mengecek status unlock game ===
   Future<void> _checkGameUnlockStatus() async {
     setState(() { _isLoadingStatus = true; });
@@ -101,34 +120,22 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin, 
   }
 
   // ... (dispose, didChangeAppLifecycleState, audio functions tidak berubah) ...
-    @override
-  void dispose() {
-    _bgController.dispose();
-    _menuController.dispose();
-    _musicPlayer.stop();
-    _musicPlayer.dispose();
-    _sfxPlayer.dispose();
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _musicPlayer.pause();
-    } else if (state == AppLifecycleState.resumed) {
-      if (_volume > 0) {
-         _musicPlayer.resume();
-      }
-    }
-  }
+
+
 
   Future<void> _loadVolume() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _volume = prefs.getDouble('gameVolume') ?? 0.5;
     });
+  }
+
+  Future<void> _playBackgroundMusic() async {
+    if (_volume > 0) {
+      await _musicPlayer.setVolume(_volume);
+      await _musicPlayer.play(AssetSource('audio/music_4.mp3'));
+    }
   }
 
   Future<void> _setVolume(double newVolume) async {
@@ -147,10 +154,6 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin, 
     }
   }
   
-  Future<void> _playBackgroundMusic() async {
-    await _musicPlayer.setVolume(_volume);
-    await _musicPlayer.play(AssetSource('audio/music_4.mp3'));
-  }
 
   void _showVolumeDialog() {
     _playButtonTapSound(); 
@@ -265,21 +268,26 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin, 
                               icon: Icons.auto_stories_rounded,
                               title: 'Materi',
                               color: const Color(0xFF66BB6A),
-                              onTap: () async { // Jadikan async
+                              onTap: () async {
+                                await _musicPlayer.pause(); // hentikan musik dulu sebelum pindah
                                 await Navigator.push(context, MaterialPageRoute(builder: (_) => const MateriScreen()));
-                                // Setelah kembali dari materi, cek ulang status game
                                 _checkGameUnlockStatus();
+                                await _musicPlayer.resume(); // lanjutkan musik saat kembali ke menu
                               },
                             ),
-                            // === PERUBAHAN: Kirim status unlock ke tombol Mainkan ===
+
                             _buildBubbleMenuItem(
                               animation: _menuController,
                               icon: Icons.sports_esports_rounded,
                               title: 'Mainkan',
                               color: const Color(0xFFFFA726),
-                              isEnabled: _isLoadingStatus ? false : _isGameUnlocked, // Disable saat loading
-                              isLoading: _isLoadingStatus, // Kirim status loading
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PlayScreen())),
+                              isEnabled: _isLoadingStatus ? false : _isGameUnlocked,
+                              isLoading: _isLoadingStatus,
+                              onTap: () async {
+                                await _musicPlayer.pause(); // hentikan musik dulu sebelum pindah
+                                await Navigator.push(context, MaterialPageRoute(builder: (_) => const PlayScreen()));
+                                await _musicPlayer.resume(); // lanjutkan musik saat kembali
+                              },
                             ),
                           ],
                         ),
@@ -287,22 +295,31 @@ class _MenuScreenState extends State<MenuScreen> with TickerProviderStateMixin, 
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                             _buildBubbleMenuItem(
+                            _buildBubbleMenuItem(
                               animation: _menuController,
                               icon: Icons.edit_note_rounded,
                               title: 'Soal',
                               color: const Color(0xFFAB47BC),
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SoalScreen())),
+                              onTap: () async {
+                                await _stopMusic(); // Hentikan musik sebelum pindah
+                                await Navigator.push(context, MaterialPageRoute(builder: (_) => const SoalScreen()));
+                                await _resumeMusic(); // Mainkan lagi saat kembali ke menu
+                              },
                             ),
                             _buildBubbleMenuItem(
                               animation: _menuController,
                               icon: Icons.emoji_events_rounded,
                               title: 'Peringkat',
                               color: const Color(0xFF29B6F6),
-                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GameLeaderboardScreen())),
+                              onTap: () async {
+                                await _stopMusic(); // Hentikan musik sebelum pindah
+                                await Navigator.push(context, MaterialPageRoute(builder: (_) => const GameLeaderboardScreen()));
+                                await _resumeMusic(); // Mainkan lagi saat kembali ke menu
+                              },
                             ),
                           ],
                         ),
+
                       ],
                     ),
                   ),
